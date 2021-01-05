@@ -1,87 +1,72 @@
 import torch.nn as nn
 import torch
+import torchvision.models as models
+import torchvision
+from my_transforms import Transform_img_labels
+
 
 class Yolo(nn.Module):
     def __init__(self):
         super().__init__()
-        self.create_model_vars()
-    
-    def one_pad_conv(self, in_channels, out_channels, kernel_size, stride=(1,1)):
-        return nn.Conv2d(in_channels, out_channels,  kernel_size, stride, padding=1)
+        self.model = models.resnet18(pretrained=True)
+        self.prelast_linear = torch.nn.Linear(512*7*7, 4096)
+        self.last_linear = torch.nn.Linear(4096, 7*7*30)
+        self.lambda_coord = torch.Tensor([0.5])
+        self.lambda_noobj = torch.Tensor([0.5])
+        self.cats = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
+                     'dog', 'horse', 'motorbike', 'person', 'sheep', 'sofa', 'diningtable', 'pottedplant', 'train', 'tvmonitor']
 
-    def create_model_vars(self):
-        self.conv1 = self.one_pad_conv(3, 64, (7,7))
-        self.maxpool1 = nn.MaxPool2d((2,2), stride=2)
-        self.conv2 = self.one_pad_conv(64, 192,(3,3))
-        self.maxpool2 = nn.MaxPool2d((2,2), stride=2)
-        self.conv3_1 = self.one_pad_conv(192, 256, (1,1))
-        self.conv3_2 = self.one_pad_conv(256, 256, (3,3))
-        self.conv3_3 = self.one_pad_conv(256, 512, (1,1))
-        self.conv3_4 = self.one_pad_conv(512, 256, (3,3))
-        self.maxpool3 = nn.MaxPool2d((2,2), 2)
-        self.conv4_1_1 = self.one_pad_conv(256,512 , (1,1))
-        self.conv4_1_2 = self.one_pad_conv(512, 256, (3,3))
-        self.conv4_1_3 = self.one_pad_conv(256,512 , (1,1))
-        self.conv4_1_4 = self.one_pad_conv(512, 256, (3,3))
-        self.conv4_1_5 = self.one_pad_conv(256,512 , (1,1))
-        self.conv4_1_6 = self.one_pad_conv(512, 256, (3,3))
-        self.conv4_1_7 = self.one_pad_conv(256,512 , (1,1))
-        self.conv4_1_8 = self.one_pad_conv(512, 512, (3,3))
-        self.conv4_2 = self.one_pad_conv(512, 1024, (1,1))
-        self.conv4_3 = self.one_pad_conv(1024, 512, (3,3))
-        self.maxpool4 = nn.MaxPool2d((2,2), 2)
-        self.conv5_1_1 = self.one_pad_conv(512,1024, (1,1))
-        self.conv5_1_2 = self.one_pad_conv(1024, 512, (3,3))
-        self.conv5_1_3 = self.one_pad_conv(512,1024, (1,1))
-        self.conv5_1_4 = self.one_pad_conv(1024, 512, (3,3))
-        self.conv5_2 = self.one_pad_conv(512, 1024, (3,3))
-        self.conv5_3 = self.one_pad_conv(1024, 1024, (3,3), stride=2)
-        self.conv6_1 = self.one_pad_conv(1024, 1024, (3,3))
-        self.conv6_2 = self.one_pad_conv(1024, 1024, (3,3))
+    def get_index(self, name):
+        return self.cats.index(name)
 
-        self.linear_7 = nn.Linear(7*7*1024, 4096)
-        self.out_8 = nn.Linear(4096, 7*7*30)
+    def dataset_inspect(self):
+        root_dir = "/home/m/Pobrane/VOC2007"
+        transformacje=Transform_img_labels()
+        self.dataset = torchvision.datasets.VOCDetection(
+            root_dir, year="2007", image_set='train', download=True, transforms=transformacje)
 
-        self.out_imagenet =  nn.Linear(4096, 1000)
+        for i, x in enumerate(self.dataset):
+            if i <60:
+                image, annot = x
+                print(annot)
+            else:
+                break
 
-    def forward_common(self, input):
-        x = self.conv1(input)
-        x = self.maxpool1(x)
-        x = self.conv2(x)
-        x = self.maxpool2(x)
-        x = self.conv3_1(x)
-        x = self.conv3_2(x)
-        x = self.conv3_3(x)
-        x = self.conv3_4(x)
-        x = self.maxpool3(x)
-        x = self.conv4_1_1(x)
-        x = self.conv4_1_2(x)
-        x = self.conv4_1_3(x)
-        x = self.conv4_1_4(x)
-        x = self.conv4_1_5(x)
-        x = self.conv4_1_6(x)
-        x = self.conv4_1_7(x)
-        x = self.conv4_1_8(x)
-        x = self.conv4_2(x)
-        x = self.conv4_3(x)
-        x = self.maxpool4(x)
-        x = self.conv5_1_1(x)
-        x = self.conv5_1_2(x)
-        x = self.conv5_1_3(x)
-        x = self.conv5_1_4(x)
-        x = self.conv5_2(x)
-        x = self.conv5_3(x)
-        x = self.conv6_1(x)
-        x = self.conv6_2(x)
-        return x
-    
+    def get_loc_error(self):
+        pass
+
+    def get_w_h_error(self):
+        pass
+
+    def get_confidence_error(self):
+        pass
+
+    def get_conditional_class_prob_exist(self):
+        pass
+
+    def get_conditional_class_prob_notexists(self):
+        pass
+
     def forward_imagenet(self, input):
-        x = self.forward_common(input)
-        print(x.shape)
-        x = x.view(-1, 7*7*1024)
-        x = self.linear_7(x)
-        x = self.out_imagenet(x)
+        x = self.model.conv1(input)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        x = self.model.maxpool(x)
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x = self.model.layer3(x)
+        x = self.model.layer4(x)
         return x
+
+    def forward(self, input):
+        x = self.forward_imagenet(input)
+        x = x.view(-1, 512*7*7)
+        print(x.shape)
+        x = self.prelast_linear(x)
+        x = self.last_linear(x)
+        print(x.shape)
+
 
 yolo = Yolo()
-print(yolo.forward_imagenet(torch.Tensor(2,3, 224, 224)))
+yolo.dataset_inspect()
+#yolo.forward(torch.Tensor(2,3, 224, 224))

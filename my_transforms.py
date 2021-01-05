@@ -39,7 +39,7 @@ class Transform_img_labels():
         if not isinstance(objects, list):
             objects = list([objects])
 		
-        tr_objects = []
+        cell_objs = {}
         for obj in list(objects):
             
             xmin = float(obj['bndbox']['xmin'])*coef_x
@@ -48,10 +48,17 @@ class Transform_img_labels():
             ymax = float(obj['bndbox']['ymax'])*coef_y  
             class_obj = self.class_dict.index(obj['name'])
             cell = self.cell_calc(xmin,ymin, xmax,ymax)
+            
             width_height = self.width_height_percent(xmin,ymin, xmax,ymax)
             cell_offset = self.cell_offset_percent(xmin,ymin, xmax,ymax)
-
-            tr_objects.append([class_obj, cell, width_height, cell_offset])
-
-        return self.transform(img), tr_objects
+            
+            if cell not in cell_objs:
+                cell_objs[cell] = []
+            cell_objs[cell].append([class_obj, width_height, cell_offset])
+        
+        for key in cell_objs:
+            lista = cell_objs[key]
+            cell_objs[key]= sorted(lista, key=lambda lista: lista[1][0]*lista[1][1], reverse=True)
+        
+        return self.transform(img), cell_objs
     

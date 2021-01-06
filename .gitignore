@@ -1,2 +1,6 @@
 __vscode__/
 __pycache__/
+lightning_logs
+wandb/
+yolo/
+api_key.txt

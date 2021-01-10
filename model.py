@@ -13,6 +13,7 @@ import cv2
 import random 
 import numpy as np
 from my_transforms import Transform_img_labels
+from losses import Losses
 with open("api_key.txt", "r") as f:
     api_key = json.load(f)
     print("opened")
@@ -27,8 +28,7 @@ class Yolo(pl.LightningModule):
         self.prelast_activation = torch.nn.LeakyReLU(negative_slope=0.1)
         self.last_linear = torch.nn.Linear(4096, 7*7*30)
         self.last_relu = torch.nn.ReLU()
-        self.lambda_coord = torch.Tensor([0.5]).cuda()
-        self.lambda_noobj = torch.Tensor([0.5]).cuda()
+        
         self.class_names = Transform_img_labels().class_dict
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
@@ -38,7 +38,6 @@ class Yolo(pl.LightningModule):
         return self.cats.index(name)
     
     def training_step(self, batch, batch_idx):
-      
         if len(batch) == 2:
             img, annot = batch
         else:
@@ -54,7 +53,6 @@ class Yolo(pl.LightningModule):
         x, y = batch
         annot = y
         outputs = self.forward(x)
-        
         loss = self.loss_fn(outputs, annot)
         self.log('val_loss', loss, on_step=True, on_epoch=False)
         
@@ -65,9 +63,7 @@ class Yolo(pl.LightningModule):
         if in_coor < 0:
             return 0
         return in_coor
-    def output_to_img(self, img, outputs):
-        
-        
+    def output_to_img(self, img, outputs):   
         img = img.cpu().detach().numpy()
         out = outputs.cpu().detach().numpy()
         out = out[0]
@@ -97,7 +93,7 @@ class Yolo(pl.LightningModule):
                         img = cv2.rectangle(img, (yup, xleft), (xright, ydown), (255, 255, 0), 1)
                         
                         '''
-                        puttext
+                        puttextget_loc_error(self, predictions, targets)
                         '''
                         font = cv2.FONT_HERSHEY_SIMPLEX 
   
@@ -132,101 +128,17 @@ class Yolo(pl.LightningModule):
         
     
     def loss_fn(self, out, annot):
-        loss1 = self.get_loc_error(out, annot)
-        loss2 = self.get_w_h_error(out, annot)
-        loss3 = self.get_conditional_class_prob_exist(out, annot)
-        loss4 = self.get_conditional_class_prob_notexists(out, annot)
-        loss5 = self.get_confidence_error(out, annot)
+        loss1 = Losses.get_loc_error(out, annot)
+        loss2 = Losses.get_w_h_error(out, annot)
+        loss3 = Losses.get_conditional_class_prob_exist(out, annot)
+        loss4 = Losses.get_conditional_class_prob_notexist(out, annot)
+        loss5 = Losses.get_confidence_error(out, annot)
         return loss1 + loss2+loss3+loss4+loss5
     
-    def some_iterator(self, predictions):
-        predictions_view = predictions.view(-1, 7,7, 30)
-        for image_nr in range(predictions_view.shape[0]):
-            for y in range(predictions_view.shape[1]):
-                for x in range(predictions_view.shape[2]):
-                     
-                    yield y,x,predictions_view[image_nr, y,x, :]
+    
     
 
 
-    def get_loc_error(self, predictions, targets):
-        
-        loss = 0
-        for y,x,pred in self.some_iterator(predictions):
-            x1,y1,_,_,_,x2,y2 = pred[:7]
-            if (y,x) in targets:
-                for i, tar in enumerate(targets[(y,x)]):
-                    ypred, xpred = tar[2]
-                    if i == 0:
-                        loss += self.lambda_coord*(torch.pow(x1-xpred,2)+ torch.pow(y1-ypred,2))          
-                    elif i == 1:
-                        loss += self.lambda_coord*(torch.pow(x2-xpred,2)+ torch.pow(y2-ypred,2))
-                    else:
-                        break
-                    
-        return loss
-    
-    def get_loc_err_equation(self, wpred,wtar, hpred,htar):
-        errw = self.lambda_coord*torch.pow(torch.sqrt(wpred)-torch.sqrt(wtar),2)
-        errh = self.lambda_coord*torch.pow(torch.sqrt(hpred)-torch.sqrt(htar),2)
-        return errw + errh
-    
-    def get_w_h_error(self, predictions, targets):
-        loss = 0
-        for y,x,pred in self.some_iterator(predictions):
-            _,_,w1pred,h1pred,_,_,_, w2pred,h2pred = pred[:9]
-            if (y,x) in targets:
-                
-                for i, tar in enumerate(targets[(y,x)]):
-                    wtar, htar = tar[1]
-                    if i == 0:
-                        loss += self.get_loc_err_equation(w1pred, wtar, h1pred, htar)      
-                    elif i == 1:
-                        loss += self.get_loc_err_equation(w2pred, wtar, h2pred, htar)
-                    else:
-                        break
-        return loss
-
-    def get_confidence_error(self, predictions, targets):
-        loss = 0
-        for y,x,pred in self.some_iterator(predictions):
-            x1,y1,w1,h1,p1,x2,y2,w2,h2,p2= pred[:10]
-            if (y,x) in targets:
-                for i, tar in enumerate(targets[(y,x)]):
-                    tarw, tarh = torch.Tensor(tar[1]).cuda()
-                    tary, tarx = torch.Tensor(tar[2]).cuda()
-                    if i==0:
-                        iou = Iou.get_iou(x, y, x1, y1, w1, h1, tarx, tary, tarw, tarh)
-                        loss += torch.pow(iou-p1,2)
-                    elif i==1:
-                        iou = Iou.get_iou(x, y, x2, y2, w2, h2, tarx, tary, tarw, tarh)
-                        loss += torch.pow(iou-p2,2)
-                    else:
-                        break
-        
-        return loss
-                
-    def get_conditional_class_prob_exist(self, predictions, targets):
-        loss = 0
-        for y,x,pred in self.some_iterator(predictions):
-            pred_class = pred[10:]
-            if (y,x) in targets:
-                des_class = targets[(y,x)][0]
-                for c in range(20):
-                    if c == des_class:
-                        loss += torch.pow(torch.Tensor([1]).cuda()-pred_class[c],2)
-                    else:
-                        loss += torch.pow(torch.Tensor([0]).cuda()-pred_class[c],2)                
-        return loss
-
-    def get_conditional_class_prob_notexists(self, predictions, targets):
-        loss = 0
-        for y,x,pred in self.some_iterator(predictions):
-            pred_class = pred[10:]
-            if (y,x) not in targets:
-                for c in range(20):
-                    loss += self.lambda_noobj*torch.pow(torch.Tensor([0]).cuda()-pred_class[c],2)                
-        return loss
 
     def forward_imagenet(self, input):
         x = self.model.features(input)

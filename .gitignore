@@ -4,3 +4,6 @@ lightning_logs
 wandb/
 yolo/
 api_key.txt
+checkpoints/
+.vscode/
+val_out/

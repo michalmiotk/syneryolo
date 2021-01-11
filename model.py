@@ -16,7 +16,7 @@ from my_transforms import Transform_img_labels
 from losses import Losses
 with open("api_key.txt", "r") as f:
     api_key = json.load(f)
-    print("opened")
+
 os.environ["WANDB_API_KEY"] = api_key["api_key"]
 
 
@@ -29,34 +29,39 @@ class Yolo(pl.LightningModule):
         self.last_linear = torch.nn.Linear(4096, 7*7*30)
         self.last_relu = torch.nn.ReLU()
         
-        self.class_names = Transform_img_labels().class_dict
+        self.class_names = Transform_img_labels().class_list
+        self.lr = 0.0065
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
     def get_index(self, name):
         return self.cats.index(name)
     
     def training_step(self, batch, batch_idx):
+        
         if len(batch) == 2:
             img, annot = batch
         else:
             img = batch
             annot = {}
+        
         outputs = self.forward(img)
+
         loss = self.loss_fn(outputs, annot)
         self.output_to_img(img, outputs)
         self.log('train_loss', loss, on_step=True, on_epoch=False)
+        
         return {'loss': loss}
 
     def validation_step(self, batch, batch_idx):
+        
         x, y = batch
         annot = y
         outputs = self.forward(x)
         loss = self.loss_fn(outputs, annot)
-        self.log('val_loss', loss, on_step=True, on_epoch=False)
+        return {'val_loss': loss}
         
-        return {'loss': loss}
     def coor_trimer(self, in_coor):
         if in_coor>447:
             return 447
@@ -84,11 +89,10 @@ class Yolo(pl.LightningModule):
                         if len(img.shape) !=3:
                             return
                         img = img*255
-                        print(img.shape)
+
                         img = np.moveaxis(img,0,2)
                         
                         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                        print(img.shape, (yup, xleft), (xright, ydown))
                         
                         img = cv2.rectangle(img, (yup, xleft), (xright, ydown), (255, 255, 0), 1)
                         
@@ -120,6 +124,7 @@ class Yolo(pl.LightningModule):
                         cv2.imwrite("val_out/"+name+".png", img)
                     
     def test_step(self, batch, batch_idx):
+
         x, y = batch
         img, annot = y
         outputs = self.forward(x)
@@ -128,18 +133,16 @@ class Yolo(pl.LightningModule):
         
     
     def loss_fn(self, out, annot):
-        loss1 = Losses.get_loc_error(out, annot)
-        loss2 = Losses.get_w_h_error(out, annot)
-        loss3 = Losses.get_conditional_class_prob_exist(out, annot)
-        loss4 = Losses.get_conditional_class_prob_notexist(out, annot)
-        loss5 = Losses.get_confidence_error(out, annot)
+        loss1, loss2, loss3, loss4, loss5 = [torch.autograd.Variable(torch.Tensor([0]).cuda())]*5
+        
+        for i in range(out.shape[0]):
+            loss1 += Losses.get_loc_error(out[i], annot[i])
+            loss2 += Losses.get_w_h_error(out[i], annot[i])
+            loss3 += Losses.get_conditional_class_prob_exist(out[i], annot[i])
+            loss4 += Losses.get_conditional_class_prob_notexist(out[i], annot[i])
+            loss5 += Losses.get_confidence_error(out[i], annot[i])
         return loss1 + loss2+loss3+loss4+loss5
-    
-    
-    
-
-
-
+        
     def forward_imagenet(self, input):
         x = self.model.features(input)
         x = self.model.avgpool(x)
@@ -155,18 +158,40 @@ class Yolo(pl.LightningModule):
         x = self.last_relu(x)
         return x
     
-
+'''
 model = Yolo()
-#model.model.load_state_dict(torch.load("checkpoints/yolo/xxx/checkpoints"))
-dm = DataModule(bs=1)
-dm.prepare_data()
 
+#model.model.load_state_dict(torch.load("checkpoints/yolo/xxx/checkpoints"))
+
+#dm.prepare_data()
+#
 wandb_logger = WandbLogger(project="yolo", name='first trials')
-trainer = Trainer(max_epochs=121, fast_dev_run=False, gpus=1, profiler=False, logger=wandb_logger, progress_bar_refresh_rate=1, log_every_n_steps=1,default_root_dir='checkpoints')#, 
-trainer.fit(model, dm)
+trainer = Trainer(gpus=1,auto_lr_find=True)#max_epochs=121, fast_dev_run=True, , profiler=False, logger=wandb_logger, progress_bar_refresh_rate=1,default_root_dir='checkpoints'
+dm = DataModule(bs=4)
+trainer.fit(model, datamodule=dm)
 '''
-dm = DataModule(bs=1)
-dm.prepare_data()
-for x in dm.train_dataset:
-    print(len(x))
-'''
+
+dm = DataModule(bs=16)
+model = Yolo()
+wandb_logger = WandbLogger(project="yolo", name='first trials')
+trainer = Trainer(gpus=1, max_epochs=121,  profiler=False, logger=wandb_logger,default_root_dir='checkpoints')
+
+# Run learning rate finder
+lr_finder = trainer.tuner.lr_find(model, datamodule=dm)
+
+# Results can be found in
+print(lr_finder.results)
+
+# Plot with
+fig = lr_finder.plot(suggest=True)
+fig.savefig("lr.png")
+
+
+# Pick point based on plot, or get suggestion
+new_lr = lr_finder.suggestion()
+print("choosed lr", new_lr)
+# update hparams of the model
+model.hparams.lr = 0.001#new_lr
+
+# Fit model
+trainer.fit(model, datamodule=dm)

@@ -6,8 +6,8 @@ class Transform_img_labels():
         self.size = 448
         self.grid_size=7
         self.transform = torchvision.transforms.Compose([torchvision.transforms.Resize(
-            (self.size, self.size)), torchvision.transforms.ToTensor()])
-        self.class_dict = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
+            (self.size, self.size)), torchvision.transforms.ToTensor(), torchvision.transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+        self.class_list = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
         'dog', 'horse', 'motorbike', 'person', 'sheep', 'sofa', 'diningtable', 'pottedplant', 'train', 'tvmonitor']
 
         self.cell_size = self.size/self.grid_size
@@ -46,19 +46,22 @@ class Transform_img_labels():
             ymin = float(obj['bndbox']['ymin'])*coef_y
             xmax = float(obj['bndbox']['xmax'])*coef_x
             ymax = float(obj['bndbox']['ymax'])*coef_y  
-            class_obj = self.class_dict.index(obj['name'])
+            index_class_obj = self.class_list.index(obj['name'])
             cell = self.cell_calc(xmin,ymin, xmax,ymax)
             
             width_height = self.width_height_percent(xmin,ymin, xmax,ymax)
             cell_offset = self.cell_offset_percent(xmin,ymin, xmax,ymax)
             
-            if cell not in cell_objs:
+            
+            if not cell_objs.get(cell):
                 cell_objs[cell] = []
-            cell_objs[cell].append([class_obj, width_height, cell_offset])
+            cell_objs[cell].append([index_class_obj, width_height, cell_offset])
+            
         
+        sorted_cell_objs = {}
         for key in cell_objs:
             lista = cell_objs[key]
-            cell_objs[key]= sorted(lista, key=lambda lista: lista[1][0]*lista[1][1], reverse=True)
+            sorted_cell_objs[key]= sorted(lista, key=lambda lista: lista[1][0]*lista[1][1], reverse=True)
         
-        return self.transform(img), cell_objs
-    
+        return self.transform(img), sorted_cell_objs
+        

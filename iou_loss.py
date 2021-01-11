@@ -1,5 +1,6 @@
 
 import torch 
+import torchvision
 
 class Iou:
     size = 448
@@ -47,20 +48,9 @@ class Iou:
         '''
         xminpred, yminpred, xmaxpred, ymaxpred = Iou.get_xmin_ymin_xmax_ymax(predx, predy, predw, predh, xcell, ycell)
         xmintar, ymintar, xmaxtar, ymaxtar = Iou.get_xmin_ymin_xmax_ymax(tarx, tary, tarw, tarh, xcell, ycell)
-        if (torch.pow(xminpred, 2) + torch.pow(yminpred, 2)) < (torch.pow(xmintar, 2) + torch.pow(ymintar, 2)): #pred is over tar
-            xminup, xmaxup, yminup, ymaxup = xminpred, xmaxpred, yminpred, ymaxpred
-            xmindown, xmaxdown, ymindown, ymaxdown =  xmintar, xmaxtar, ymintar, ymaxtar
-        else:
-            xminup, xmaxup, yminup, ymaxup = xmintar, xmaxtar, ymintar, ymaxtar
-            xmindown, xmaxdown, ymindown, ymaxdown = xminpred, xmaxpred, yminpred, ymaxpred
-            
-        
-        if (torch.pow(xmindown, 2)+ torch.pow(ymindown, 2)) < (torch.pow(xmaxup, 2)+ torch.pow(ymaxup, 2)):
-            intersection = (xmaxup - xmindown)*(ymaxup-ymindown)
-            union = (xmaxup-xminup)*(ymaxup-yminup) + (xmaxdown-xmindown)*(ymaxdown-ymindown) - intersection
-            return intersection/union
-        else:
-            return 0
-            
-             
+        intersection_union = torchvision.ops.box_iou(torch.Tensor([[xminpred, yminpred, xmaxpred, ymaxpred]]).cuda(), torch.Tensor([[xmintar, ymintar, xmaxtar, ymaxtar]]).cuda())
+        if intersection_union>1:
+            print(intersection_union)
+        return intersection_union
+
             

@@ -7,3 +7,4 @@ api_key.txt
 checkpoints/
 .vscode/
 val_out/
+*.png

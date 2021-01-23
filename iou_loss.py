@@ -4,7 +4,7 @@ import torchvision
 
 class Iou:
     size = 448
-    cellnr = 7
+    cellnr = 14
     celldim = size/cellnr
     @staticmethod
     def get_xmin_ymin_xmax_ymax(xcelloffset,ycelloffset,w,h, xcell, ycell):
@@ -48,9 +48,16 @@ class Iou:
         '''
         xminpred, yminpred, xmaxpred, ymaxpred = Iou.get_xmin_ymin_xmax_ymax(predx, predy, predw, predh, xcell, ycell)
         xmintar, ymintar, xmaxtar, ymaxtar = Iou.get_xmin_ymin_xmax_ymax(tarx, tary, tarw, tarh, xcell, ycell)
+        
         intersection_union = torchvision.ops.box_iou(torch.Tensor([[xminpred, yminpred, xmaxpred, ymaxpred]]).cuda(), torch.Tensor([[xmintar, ymintar, xmaxtar, ymaxtar]]).cuda())
         if intersection_union>1:
             print(intersection_union)
+        if torch.isnan(intersection_union):
+            print("*********************************")
+            print("pred raw", predx, predy, predw, predh, xcell, ycell)
+            print("pred", xminpred, yminpred, xmaxpred, ymaxpred)
+            print("tar", xmintar, ymintar, xmaxtar, ymaxtar)
+            print("*********************************")
         return intersection_union
 
             

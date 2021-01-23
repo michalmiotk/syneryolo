@@ -4,12 +4,11 @@ import torchvision
 class Transform_img_labels():
     def __init__(self):
         self.size = 448
-        self.grid_size=7
+        self.grid_size=14
         self.transform = torchvision.transforms.Compose([torchvision.transforms.Resize(
-            (self.size, self.size)), torchvision.transforms.ToTensor(), torchvision.transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+            (self.size, self.size)), torchvision.transforms.ToTensor(), torchvision.transforms.Normalize((0.4463, 0.4226, 0.3913), (0.2715, 0.2686, 0.2811))])
         self.class_list = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
         'dog', 'horse', 'motorbike', 'person', 'sheep', 'sofa', 'diningtable', 'pottedplant', 'train', 'tvmonitor']
-
         self.cell_size = self.size/self.grid_size
 
     def cell_calc(self, xmin, ymin, xmax, ymax):
@@ -61,7 +60,7 @@ class Transform_img_labels():
         sorted_cell_objs = {}
         for key in cell_objs:
             lista = cell_objs[key]
-            sorted_cell_objs[key]= sorted(lista, key=lambda lista: lista[1][0]*lista[1][1], reverse=True)
+            sorted_cell_objs[key]= max(lista, key=lambda lista: lista[1][0]*lista[1][1])
         
         return self.transform(img), sorted_cell_objs
         

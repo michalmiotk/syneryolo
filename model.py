@@ -114,13 +114,17 @@ class Yolo(pl.LightningModule):
 
         outputs = self.forward(img)
 
-        loss_loc = self.loss_fn(outputs, annot)
-        loss = torch.mean(loss_loc)
-        print(loss.shape)
+        loss_loc, loss_wh, loss_conf, loss_cls = self.loss_fn(outputs, annot)
+        loss_loc = torch.mean(loss_loc)
+        loss_wh = torch.mean(loss_wh)
+        loss_conf = torch.mean(loss_conf)
+        loss_cls = torch.mean(loss_cls)
+        loss = loss_loc + loss_wh + loss_conf + loss_cls
         self.output_to_img(img, outputs)
-        
-        
-        
+        self.log('train_loss_loc', loss_loc, on_step=True, on_epoch=False)
+        self.log('train_loss_wh', loss_wh, on_step=True, on_epoch=False)
+        self.log('train_loss_conf', loss_conf, on_step=True, on_epoch=False)
+        self.log('train_loss_cls', loss_cls, on_step=True, on_epoch=False)
         self.log('train_loss', loss, on_step=True, on_epoch=False)
         return {'loss': loss}
 
@@ -129,9 +133,13 @@ class Yolo(pl.LightningModule):
         x, y = batch
         annot = y
         outputs = self.forward(x)
-        loss_loc = self.loss_fn(outputs, annot)
+        loss_loc, losswh, loss_conf, loss_cls = self.loss_fn(outputs, annot)
         loss_loc = torch.mean(loss_loc)
-        return {'val_loss': loss_loc}
+        losswh= torch.mean(losswh)
+        loss_conf = torch.mean(loss_conf)
+        loss_cls = torch.mean(loss_cls)
+        loss = loss_loc + losswh + loss_conf + loss_cls
+        return {'val_loss': loss}
         
     def coor_trimer(self, in_coor):
         if in_coor>447:
@@ -198,6 +206,7 @@ class Yolo(pl.LightningModule):
             nn.Dropout(0.0),
             nn.LeakyReLU(0.1),
             nn.Linear(496, S * S * (C + B * 5)),
+            nn.Sigmoid()
         )
     
     def output_to_img(self, img, outputs):   
@@ -236,7 +245,10 @@ class Yolo(pl.LightningModule):
     def loss_fn(self, out, annot):
         tar_vector = Losses.get_tar_vector(annot)
         loss_loc = Losses.get_loc_error(out, tar_vector)
-        return loss_loc
+        loss_wh = Losses.get_w_h_error(out, tar_vector)
+        loss_conf = Losses.get_confidence_error(out, tar_vector)
+        loss_cls = Losses.get_class_error(out, tar_vector)
+        return loss_loc, loss_wh, loss_conf, loss_cls
     '''    
     def forward_resnet(self, input):
         x = self.model.conv1(input)
@@ -267,7 +279,7 @@ class Yolo(pl.LightningModule):
 dm = DataModule(bs=16)
 model = Yolo()
 lr_logger = LearningRateMonitor(logging_interval='step', log_momentum=True)
-wandb_logger = WandbLogger(project="yolo", name='maybe 1 good implementation')
+wandb_logger = WandbLogger(project="yolo", name='close to 1 good implementation')
 trainer = Trainer(gpus=1, max_epochs=1201,  profiler=False, logger=wandb_logger,default_root_dir='checkpoints',progress_bar_refresh_rate=1,log_every_n_steps=1, callbacks=[lr_logger] )
 # Fit model
 trainer.fit(model, datamodule=dm)

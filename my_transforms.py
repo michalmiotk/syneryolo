@@ -30,8 +30,8 @@ class Transform_img_labels():
         label = target
         shape_x = int(label['annotation']['size']['width'])
         shape_y = int(label['annotation']['size']['height'])
-        coef_x = shape_x/self.size
-        coef_y = shape_y/self.size
+        coef_x = self.size/shape_x
+        coef_y = self.size/shape_y
         self.factor = (1/shape_x, 1/shape_y)
         objects = label['annotation']['object']
 		
@@ -54,8 +54,16 @@ class Transform_img_labels():
             
             if not cell_objs.get(cell):
                 cell_objs[cell] = []
-            assert cell_offset[0] >0
-            assert cell_offset[1] > 0
+            try:
+                assert 0<=cell_offset[0] <=1
+                assert 0<=cell_offset[1] <=1
+            except AssertionError as e:
+                print(e, cell_offset)
+            try:
+                assert 0<=width_height[0]<=1
+                assert 0<=width_height[1]<=1
+            except AssertionError as e:
+                print(e, width_height)
             cell_objs[cell].append([index_class_obj, cell_offset, width_height])
             
         

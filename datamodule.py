@@ -21,7 +21,7 @@ class DataModule(pl.LightningDataModule):
     
     def setup(self, stage=None):
         train_dataset = torchvision.datasets.VOCDetection(self.root_dir_train, year=self.year,image_set='train', download=True, transforms=self.transform_VOC)
-        length_train, length_val = 100, 10
+        length_train, length_val = 16, 10
         self.train_dataset = torch.utils.data.random_split(train_dataset, [length_train, len(train_dataset)-length_train])[0]
         trainval_dataset = torchvision.datasets.VOCDetection(self.root_dir_val, year=self.year,image_set='trainval', download=True, transforms=self.transform_VOC)
         self.trainval_dataset = torch.utils.data.random_split(trainval_dataset, [length_val, len(trainval_dataset)-length_val])[0]

@@ -12,7 +12,7 @@ class LitAutoEncoder(pl.LightningModule):
     def __init__(self):
         super().__init__()
         self.encoder = nn.Sequential(nn.Linear(28 * 28, 128), nn.ReLU(), nn.Linear(128, 3))
-        self.decoder = nn.Sequential(nn.Linear(3, 128), nn.ReLU(), nn.Linear(128, 28 * 28))
+        self.decoder = nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 10))
         self.lr = 1e-3
         self.mnist = MNIST(os.getcwd(), download=True, transform=transforms.ToTensor())
     def forward(self, x):
@@ -24,10 +24,13 @@ class LitAutoEncoder(pl.LightningModule):
         # training_step defined the train loop. It is independent of forward
         x, y = batch
         x = x.view(x.size(0), -1)
+        #print(y)
         z = self.encoder(x)
-        x_hat = self.decoder(z)
-        loss = F.mse_loss(x_hat, x)
-        #print(loss)
+        out = self.decoder(z)
+        out_proper = torch.zeros(10)
+        out_proper[y] = 1
+        loss = 3*torch.mean(torch.pow(out-out_proper,2))
+        print(loss)
         self.log('train_loss', loss)
         return loss
 
@@ -39,21 +42,8 @@ class LitAutoEncoder(pl.LightningModule):
 
 autoencoder = LitAutoEncoder()
 trainer = pl.Trainer()
-# Run learning rate finder
-lr_finder = trainer.tuner.lr_find(autoencoder,early_stop_threshold=None,num_training=100, max_lr=1)
 
-# Results can be found in
-lr_finder.results
-
-# Plot with
-fig = lr_finder.plot(suggest=True)
-fig.show()
-fig.savefig("lrx.png")
-# Pick point based on plot, or get suggestion
-new_lr = lr_finder.suggestion()
-print("new lr is", new_lr)
-# update hparams of the model
-autoencoder.lr = new_lr
+autoencoder.lr = 0.0001
 
 # Fit model
 trainer.fit(autoencoder)

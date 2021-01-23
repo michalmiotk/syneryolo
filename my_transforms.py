@@ -4,7 +4,7 @@ import torchvision
 class Transform_img_labels():
     def __init__(self):
         self.size = 448
-        self.grid_size=14
+        self.grid_size=7
         self.transform = torchvision.transforms.Compose([torchvision.transforms.Resize(
             (self.size, self.size)), torchvision.transforms.ToTensor(), torchvision.transforms.Normalize((0.4463, 0.4226, 0.3913), (0.2715, 0.2686, 0.2811))])
         self.class_list = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
@@ -18,13 +18,13 @@ class Transform_img_labels():
         return ycell, xcell
     
     def width_height_percent(self, xmin, ymin, xmax, ymax):
-        return (ymax-ymin)/448, (xmax-xmin)/448
+        return (xmax-xmin)/self.size, (ymax-ymin)/self.size
 
     def cell_offset_percent(self, xmin, ymin, xmax, ymax):
         ycell, xcell = self.cell_calc( xmin, ymin, xmax, ymax)
-        ycenter, xcenter = ymax-ymin, xmax-xmin
+        ycenter, xcenter = (ymax+ymin)/2, (xmax+xmin)/2
         y_offset_percent, x_offset_percent = (ycenter-ycell*self.cell_size)/self.cell_size, (xcenter-xcell*self.cell_size)/self.cell_size
-        return y_offset_percent, x_offset_percent
+        return x_offset_percent,y_offset_percent
 
     def __call__(self, img, target):
         label = target
@@ -54,13 +54,15 @@ class Transform_img_labels():
             
             if not cell_objs.get(cell):
                 cell_objs[cell] = []
-            cell_objs[cell].append([index_class_obj, width_height, cell_offset])
+            assert cell_offset[0] >0
+            assert cell_offset[1] > 0
+            cell_objs[cell].append([index_class_obj, cell_offset, width_height])
             
         
         sorted_cell_objs = {}
         for key in cell_objs:
             lista = cell_objs[key]
-            sorted_cell_objs[key]= max(lista, key=lambda lista: lista[1][0]*lista[1][1])
+            sorted_cell_objs[key]= max(lista, key=lambda lista: lista[2][0]*lista[2][1])
         
         return self.transform(img), sorted_cell_objs
         
